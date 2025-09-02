@@ -1,7 +1,4 @@
-Great set of **Kubernetes interview questions** 🚀
-Let’s build strong **resume-backed, real-world answers** that make you sound like you’ve lived these scenarios as an SRE/DevOps engineer.
 
----
 
 ## 🔹 Kubernetes Interview Q\&A
 
@@ -128,6 +125,4 @@ Let’s build strong **resume-backed, real-world answers** that make you sound l
 
 ---
 
-⚡ These questions are **common in senior DevOps/SRE interviews** because they test **real-world production experience** with K8s storage, scheduling, and HA.
-
-👉 Sumanth, do you want me to **extend this into diagrams + YAML snippets** (like StatefulSet, PDB, affinity rules) so you can **showcase answers visually in interviews**?
+⚡ 
