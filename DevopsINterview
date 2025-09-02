@@ -1,0 +1,351 @@
+# L1 — Basics & Scenarios
+
+### 1) Briefly introduce yourself
+
+I’m a DevOps/SRE engineer with \~9–10 years across AWS, Kubernetes, Terraform, and CI/CD (Jenkins/GitLab). 
+I build IaC with Terraform, automate delivery with pipelines, ship containers to EKS with Helm/GitOps, and harden systems with secrets management, image scanning, and observability (Prometheus/Grafana/Datadog). I focus on reducing MTTR, predictable releases, and cost/perf optimizations.
+
+---
+
+### 2) How do you securely authenticate your cloud with Terraform?
+
+* **Local dev:** `aws configure` or `AWS_PROFILE`, short-lived STS via MFA/`aws sso login`.
+* **CI/CD:** **OIDC federation** (e.g., GitHub Actions ↔ IAM role with trust policy), no static keys.
+* **Least privilege:** dedicated IAM roles/policies per workspace/env.
+* **No keys in code**; rely on provider assuming role:
+
+  ```hcl
+  provider "aws" {
+    region  = var.region
+    assume_role { role_arn = var.deployment_role_arn }
+  }
+  ```
+
+---
+
+### 3) How do you store secrets in Terraform?
+
+* **Don’t** hardcode. Use:
+
+  * **AWS Secrets Manager / SSM Parameter Store** via data sources.
+  * **Vault provider** for dynamic creds.
+  * `variable "x" { sensitive = true }` and pass via `TF_VAR_x` or CI secrets.
+* Example:
+
+  ```hcl
+  data "aws_secretsmanager_secret_version" "db" {
+    secret_id = "prod/db_password"
+  }
+
+  variable "db_user" { type = string }
+  output "db_password" {
+    value     = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string).password
+    sensitive = true
+  }
+  ```
+
+---
+
+### 4) What is a backend in Terraform? Why use it?
+
+A **backend** stores **state** remotely (S3, GCS, Azure Blob, Terraform Cloud) and enables **locking**, **collaboration**, **encryption**, and **versioning**.
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "prod-tf-state"
+    key            = "net/vpc.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "tf-locks"
+    encrypt        = true
+  }
+}
+```
+
+---
+
+### 5) If you have existing infrastructure, how do you replicate it into Terraform state?
+
+1. Write matching resource blocks.
+2. **Import** each resource:
+
+```bash
+terraform import aws_instance.web i-0123456789abcdef0
+```
+
+3. `terraform plan` to reconcile.
+   Tip: Tools like **Terraformer** can generate HCL from existing resources (review carefully).
+
+---
+
+### 6) Lost the `.pem` key — how can you connect to your server?
+
+* **SSM Session Manager** (if SSM agent/role is present) — no SSH keys needed.
+* **EC2 Instance Connect** (supported AMIs).
+* **Attach volume** to a helper instance, edit `~/.ssh/authorized_keys`, reattach.
+* **User data** on next boot to inject a new key.
+* **Bastion** (if already configured) with authorized users.
+
+---
+
+### 7) CI/CD: artifacts in one S3 bucket, deploy to another S3 in a **different AWS account** — how to connect?
+
+* Use **cross-account IAM role** in target account; grant `s3:*` on target bucket.
+* CI role **assumes** that role via STS:
+
+  * Target account bucket policy allows the role.
+  * Source account pipeline role has `sts:AssumeRole` to target.
+* In pipeline:
+
+```bash
+aws sts assume-role --role-arn arn:aws:iam::<TARGET>:role/deployRole ...
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws s3 sync build s3://target-bucket/
+```
+
+---
+
+### 8) What is VPC Peering and Transit Gateway?
+
+* **VPC Peering:** 1:1 private routing between two VPCs (no transitive routing).
+* **Transit Gateway (TGW):** hub-and-spoke for **many-to-many** VPC/VPN/DirectConnect with centralized routing and transitivity. Use TGW at scale/multi-region.
+
+---
+
+### 9) Common CloudFront issues you’ve faced
+
+* **SSL cert in us-east-1** requirement (for custom domains).
+* **403/404** due to OAC/OAI or bucket policies.
+* **CORS** misconfig.
+* **Long invalidation times** / cache behavior mismatches.
+* **Origin timeouts** or bad health checks.
+
+---
+
+### 10) Types of AWS Load Balancers & when to use them
+
+* **ALB (L7 HTTP/HTTPS):** microservices, path/host routing, WebSockets, sticky sessions.
+* **NLB (L4 TCP/UDP):** high throughput/low latency, static IPs, TLS passthrough.
+* **CLB (classic):** legacy; avoid for new builds.
+
+---
+
+### 11) Docker `CMD` vs `ENTRYPOINT`
+
+* **ENTRYPOINT** = main executable (hard to override).
+* **CMD** = default args (or default command if ENTRYPOINT absent).
+  Combine:
+
+```dockerfile
+ENTRYPOINT ["node","server.js"]
+CMD ["--port","3000"]
+```
+
+---
+
+### 12) Basic Dockerfile for Node.js
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 3000
+CMD ["node","server.js"]
+```
+
+---
+
+### 13) Deployment vs StatefulSet (Kubernetes)
+
+* **Deployment:** stateless, interchangeable pods, no strict identity.
+* **StatefulSet:** stable identities (`pod-0`…), stable storage (PVC per pod), ordered ops — use for DBs/brokers.
+
+---
+
+# L2 — Hands-On & Advanced
+
+### 1) Jenkins Declarative Pipeline with `post`
+
+```groovy
+pipeline {
+  agent { label 'linux-docker' }
+
+  options { timestamps(); ansiColor('xterm') }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Build') {
+      steps { sh 'mvn -B -DskipTests package' }
+    }
+    stage('Unit Tests') {
+      steps { sh 'mvn test' }
+    }
+    stage('Build & Push Image') {
+      steps {
+        sh '''
+          docker build -t $ECR_REPO:$GIT_COMMIT .
+          docker push $ECR_REPO:$GIT_COMMIT
+        '''
+      }
+    }
+    stage('Deploy') {
+      steps { sh 'helm upgrade --install api charts/api -f values/prod.yaml --set image.tag=$GIT_COMMIT' }
+    }
+  }
+
+  post {
+    success { echo '✅ Pipeline succeeded'; sh 'curl -X POST $SLACK_OK' }
+    failure { echo '❌ Pipeline failed';     sh 'curl -X POST $SLACK_FAIL' }
+    always  { archiveArtifacts artifacts: 'target/*.jar', fingerprint: true }
+  }
+}
+```
+
+---
+
+### 2) COPY vs ADD in Docker
+
+* **COPY**: copy local files.
+* **ADD**: also supports **remote URLs** and **auto-extracts** local tar files.
+  Best practice: **prefer COPY**; use ADD only when you need those extras.
+
+---
+
+### 3) Multistage Dockerfile vs Distroless
+
+* **Multistage:** build in one stage, copy only artifacts to a tiny runtime → smaller, cleaner images.
+* **Distroless:** runtime image contains **only your app + minimal libs** (no shell/package manager) → very small and more secure. Often used **together** (multistage build → distroless run).
+
+---
+
+### 4) Multistage Dockerfile for Node.js
+
+```dockerfile
+# --- Build stage ---
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# --- Runtime stage (distroless optional alternative below) ---
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/package*.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+EXPOSE 3000
+CMD ["node","dist/server.js"]
+
+# Distroless runtime (swap the runtime stage above):
+# FROM gcr.io/distroless/nodejs20
+# WORKDIR /app
+# COPY --from=build /app/dist ./dist
+# COPY --from=build /app/package*.json ./
+# ENV NODE_ENV=production
+# EXPOSE 3000
+# CMD ["dist/server.js"]
+```
+
+---
+
+### 5) Explain Kubernetes Architecture (how it works)
+
+* **Control Plane (masters):**
+
+  * **API Server** (front door), **etcd** (state store), **Scheduler** (where pods go), **Controller Manager** (desired state loops).
+* **Worker Nodes:**
+
+  * **kubelet** (talks to API, starts pods), **kube-proxy** (service VIPs), **CNI plugin** (pod networking).
+* **Reconciliation:** you declare desired state (YAML). Controllers reconcile until actual == desired.
+
+---
+
+### 6) How to check Jenkins version
+
+* In UI footer or **Manage Jenkins → System Information**.
+* CLI / container:
+
+  ```bash
+  jenkins --version
+  # or
+  curl -sI http://<jenkins>/ | grep -i x-jenkins
+  ```
+
+---
+
+### 7) Kubernetes Deployment YAML (basic)
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels: { app: web }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: web
+          image: nginx:stable
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector: { app: web }
+  ports: [{ port: 80, targetPort: 80 }]
+  type: ClusterIP
+```
+
+---
+
+### 8) Shell script to create an S3 bucket
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+REGION="${1:-us-east-1}"
+BUCKET="${2:-my-unique-bucket-$RANDOM}"
+
+echo "Creating bucket: $BUCKET in $REGION"
+
+if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+  echo "Bucket already exists or you don't own it"; exit 1
+fi
+
+if [ "$REGION" = "us-east-1" ]; then
+  aws s3api create-bucket --bucket "$BUCKET"
+else
+  aws s3api create-bucket --bucket "$BUCKET" \
+    --create-bucket-configuration LocationConstraint="$REGION" \
+    --region "$REGION"
+fi
+
+aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
+aws s3api put-bucket-encryption --bucket "$BUCKET" --server-side-encryption-configuration '{
+  "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
+}'
+
+echo "✅ Bucket $BUCKET created with versioning + encryption."
+```
+
+---
+
