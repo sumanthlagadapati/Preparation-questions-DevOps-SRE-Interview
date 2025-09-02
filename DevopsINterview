@@ -348,4 +348,181 @@ echo "✅ Bucket $BUCKET created with versioning + encryption."
 ```
 
 ---
+Perfect—here’s a tight, senior-level playbook you can use verbatim in interviews.
+
+# Round 1 – Core Infra, K8s & Cloud Reliability
+
+### 1) CI/CD to safely push updates to **1,000+ GPU nodes** (no downtime)
+
+* **Progressive rings:** `canary (1–2%) → wave-1 (10%) → wave-2 (30%) → global`. Gates between waves (health SLOs, error budgets, GPU job completion rate).
+* **NodePool partitioning:** multiple **node groups** per AZ (e.g., `gpu-canary`, `gpu-batch`, `gpu-train`). Update one pool at a time.
+* **Workload-aware drain:** `kubectl cordon && kubectl drain --ignore-daemonsets --grace-period=<long>` + **PDBs** + **priority classes** so system DaemonSets (Nvidia drivers, DCGM, Node Exporter) never evict.
+* **MaxUnavailable & surge:** for MNG/ASG use small `maxUnavailable` (1–2) per group; **create\_before\_destroy** on LT/AMI; respect **soak times**.
+* **GitOps + policy guardrails:** ArgoCD/Flux with **manual hold points**, OPA/Gatekeeper to block risky changes (e.g., removing tolerations from GPU pods).
+* **Health gates:** DCGM metrics (SM util, ECC errors), job queue depth, pod pending > N sec, node readiness, NCCL all-reduce time—must pass before the next wave.
+* **Rollback plan:** immutable AMIs/Container images; `instance_refresh cancel` + scale back to previous template; Helm `rollback <rev>`.
+
+---
+
+### 2) Enforce **secrets management** across **multi-region GPU clusters** (no hardcoding)
+
+* **Central secrets authority:** HashiCorp Vault or cloud KMS secrets (AWS Secrets Manager/SSM). **Cross-region replication** enabled.
+* **Workload Identity:** IRSA (EKS) / Workload Identity (GKE) → Pods assume roles; **no static keys** in images or env.
+* **External Secrets Operator:** syncs secrets to K8s (as `Secret`) from Vault/Secrets Manager; encrypt at rest with KMS; short TTL.
+* **Sidecar/agent injectors:** Vault Agent templates for on-the-fly cert/secret renewal; rotate DB/user creds automatically.
+* **Scanning & policy:** Trivy/Checkov + pre-commit hooks to block secret strings; OPA policy denies `Secret` literals in manifests.
+
+---
+
+### 3) Affinity/anti-affinity for **mixed workloads** (compute-heavy + system services)
+
+* **Label nodes:** `node=system`, `node=gpu`, `gpu.vendor=nvidia`, `topology.kubernetes.io/zone`.
+* **Taints/tolerations:** taint GPU nodes `gpu=true:NoSchedule`; compute pods tolerate; system DaemonSets tolerate both.
+* **Affinity patterns:**
+
+  * System services (Fluent Bit, Node Exporter) → **DaemonSet** with tolerations for all nodes.
+  * Heavy compute pods → `nodeAffinity` to `node=gpu`, `podAntiAffinity` on same `job-id` to spread.
+  * Use **TopologySpreadConstraints** across zones to avoid AZ hotspots.
+
+```yaml
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node
+            operator: In
+            values: ["gpu"]
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector: { matchLabels: { app: trainer } }
+          topologyKey: "kubernetes.io/hostname"
+  topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector: { matchLabels: { app: trainer } }
+```
+
+---
+
+### 4) **etcd backups** w/ petabyte-scale workloads (ensure zero control-plane data loss)
+
+> Note: etcd holds **cluster state**, not PB app data. Goal = **zero RPO for control plane**, while app data uses its own replicated storage.
+
+* **HA etcd** (3 or 5 members) on fast SSD; **encryption at rest**; regular `etcdctl defrag`.
+* **Frequent snapshots:** `etcdctl snapshot save` every few minutes; store in versioned, encrypted object storage (S3) with **cross-region replication** and lifecycle.
+* **Automate & test restore:** CronJob + integrity checks (`etcdctl snapshot status`), periodic full **disaster-recovery rehearsals**.
+* **App data**: use replicated backends (EFS/FSx for Lustre, Portworx, Ceph/Rook) with **multi-AZ** replication & app-level checkpoints.
+
+---
+
+# Round 2 – Fire Drills, RCA & Chaos
+
+### 1) Terraform plan wants to **recreate 100+ GPU nodes** (drift). Contain & roll forward
+
+1. **Freeze changes & lock state.**
+2. **Scope blast radius:** `terraform plan -target=module.node_group` and inspect replace reasons (launch template diff, tags, userdata).
+3. **Reconcile vs. re-create:**
+
+   * If infra is correct in cloud → `terraform import`/`moved` blocks/`ignore_changes` to align state.
+   * If desired is correct → **batch Instance Refresh** per node group with small `maxUnavailable`, drain per batch.
+4. **Protect critical pools:** `lifecycle { prevent_destroy = true }` on shared resources; use **workspaces** per env.
+5. **Roll forward:** Apply to **canary node group**, soak, then promote waves. Keep previous AMI & template for immediate rollback.
+
+---
+
+### 2) **kube-proxy pods cycling**, workloads look healthy—what’s the hidden risk?
+
+* kube-proxy programs **iptables/IPVS** rules. If it flaps, **new/updated Services/Endpoints won’t program**; existing connections may keep working (conntrack), hiding the issue until a **failover/rolling update** causes blackholes.
+* **Actions:** confirm mode (`iptables` vs `ipvs`) → `ipvsadm -Ln` or `iptables -t nat -L`. Check API server reachability, version skew, CNI compatibility, node pressure. Fix root cause, then restart kube-proxy and verify rules.
+
+---
+
+### 3) **Container runtime** (e.g., containerd) crashloop on a node—replace without touching cluster
+
+1. **Isolate:** `kubectl cordon <node>; kubectl drain <node> --ignore-daemonsets --delete-emptydir-data`.
+2. **Triage on node:** `journalctl -u containerd -xe`, `crictl ps`, check disk (`/var/lib/containerd`), inode pressure, cgroups.
+3. **Repair or replace:**
+
+   * Quick fix: clear bad snapshot layers; restart runtime.
+   * Safer: let **ASG/MNG** create a fresh node with the current launch template; terminate the bad node.
+4. **Auto-remediation:** enable **Node Auto-Repair** (health checks) & Node Problem Detector.
+
+---
+
+### 4) **DNS misconfig** breaks service discovery on some nodes—live RCA + surgical fix
+
+* **Detect:** Pods failing `*.svc` lookups; `kubectl exec ... -- nslookup kube-dns` fails.
+* **Check core components:** `kubectl -n kube-system get pods -l k8s-app=kube-dns`; inspect CoreDNS logs for `SERVFAIL`/`refused`.
+* **Node path:** verify **NodeLocal DNS** IP route (e.g., `169.254.20.10`), pod `/etc/resolv.conf` search domains, kubelet `--cluster-dns`.
+* **Common fixes:**
+
+  * Correct upstream resolvers in CoreDNS ConfigMap; `kubectl rollout restart deploy/coredns`.
+  * Restore NodeLocalDNS DaemonSet or route rules.
+  * If only some nodes: fix `/etc/resolv.conf` template or user-data, then **cordon/drain** and recycle affected nodes.
+
+---
+
+# Round 3 – Leadership, Scaling Mindset & Reliability Culture
+
+### 1) Balance speed vs stability on **HPC-scale NVIDIA clusters**
+
+* **SLOs & error budgets** drive release pace; if burned, we slow/stop risky changes.
+* **Progressive delivery** (rings/waves, soak) + **feature flags** and **config toggles**.
+* **Change policy:** two-person review, automated policy checks (OPA), prerelease load/canary tests that include NCCL + GPU utilization patterns.
+* **Operations discipline:** freeze windows, rollback drills, immutable artifacts, golden AMIs, runbooks.
+
+---
+
+### 2) Cut infra costs by **20%** without reducing GPU capacity
+
+* **Increase GPU utilization:** MIG on A/H-class GPUs, **bin-pack with scheduler extensions** (Volcano/Kueue), job preemption & backfill, right-size CPU\:GPU ratios and ephemeral storage.
+* **Pricing levers:** Savings Plans/RIs for baseline, **Spot** for non-critical workers, regional pricing analysis.
+* **Storage/network:** move cold data to S3-IA/Glacier; switch EBS to **gp3** w/ tuned IOPS; reduce cross-AZ traffic; compress & sample logs.
+* **Platform waste:** turn off dev clusters off-hours, auto-scale system add-ons, slim images to cut pull time and EBS size.
+* **Observability:** cost dashboards per **namespace/team/job**, showback/chargeback to drive behavior.
+
+---
+
+### 3) Post-incident process when **minutes = millions**
+
+* **Immediate:** stabilize (rollback/feature flag), communicate ETA/status, protect customers first.
+* **Within 24–48h:** blameless postmortem with precise timeline, customer impact quantified, **five whys**, and **decision log**.
+* **Actions:** max 5–7 items, each with owner/ETA, tracked to closure; add **detectors** (SLO burn alerts, canary guards), **runbook updates**, test cases to prevent regressions.
+* **Institutionalize:** make learnings part of policy (e.g., new guardrails, preflight checks), schedule **GameDays** to rehearse the class of failure.
+
+---
+
+## Handy snippets to reference live
+
+**PDB for GPU jobs**
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: trainer-pdb }
+spec:
+  minAvailable: 90%
+  selector: { matchLabels: { app: trainer } }
+```
+
+**ASG Instance Refresh (batchy)**
+
+```bash
+aws autoscaling start-instance-refresh \
+  --auto-scaling-group-name gpu-ng-1 \
+  --preferences MinHealthyPercentage=95,InstanceWarmup=600
+```
+
+**Drain with grace**
+
+```bash
+kubectl cordon $NODE
+kubectl drain $NODE --ignore-daemonsets --delete-emptydir-data --grace-period=600 --timeout=30m
+```
+
 
