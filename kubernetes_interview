@@ -1,0 +1,133 @@
+Great set of **Kubernetes interview questions** 🚀
+Let’s build strong **resume-backed, real-world answers** that make you sound like you’ve lived these scenarios as an SRE/DevOps engineer.
+
+---
+
+## 🔹 Kubernetes Interview Q\&A
+
+### 1. **What is the difference between a Deployment and a StatefulSet in Kubernetes?**
+
+* **Deployment**: For **stateless apps** (e.g., web servers, APIs). Pods are interchangeable, no fixed identity.
+* **StatefulSet**: For **stateful apps** (e.g., databases, Kafka, Zookeeper). Pods have **sticky identities (pod-0, pod-1, …)**, ordered startup/termination, and persistent storage.
+
+---
+
+### 2. **When should you use a StatefulSet instead of a Deployment?**
+
+* When pods require:
+
+  * **Stable network identity** (same hostname).
+  * **Stable storage** (persistent volume per pod).
+  * **Ordered deployment/termination** (e.g., databases, message brokers).
+* Example: **Cassandra, Kafka, MongoDB clusters** → need StatefulSet.
+
+---
+
+### 3. **Can you attach a volume to a Deployment? If yes, how is it different from a StatefulSet?**
+
+* Yes, Deployments can use **PVCs**. But:
+
+  * **Deployment PVCs** are usually **shared** or **dynamic** (same volume for multiple replicas if RWX).
+  * **StatefulSet PVCs** are **per-pod unique** (PVC per replica), ensuring persistent data isolation.
+
+---
+
+### 4. **What could cause a StatefulSet pod to fail when rescheduled to a different availability zone?**
+
+* **Zonal PV binding**: If a PV is created in AZ-1, pod rescheduled to AZ-2 cannot mount it.
+* **Fix**: Use **multi-AZ storage classes** (EBS CSI with `volumeBindingMode: WaitForFirstConsumer` or EFS/FSx).
+
+---
+
+### 5. **How do PV/PVC behave across zones in EKS or Kubernetes in general?**
+
+* **EBS volumes** → Zonal (only attachable in the same AZ).
+* **EFS/FSx** → Regional (accessible across multiple AZs).
+* Best practice in EKS: Use **StorageClass with `WaitForFirstConsumer`** so PV is provisioned in the AZ where the pod is scheduled.
+
+---
+
+### 6. **What is a DaemonSet and when would you use it?**
+
+* DaemonSet ensures **one pod per node**.
+* Common use cases:
+
+  * **Logging agents** (Fluentd, Filebeat).
+  * **Monitoring agents** (Datadog, Prometheus Node Exporter).
+  * **Networking plugins** (CNI, kube-proxy).
+
+---
+
+### 7. **If you want two pods per node (instead of one), what alternatives to DaemonSet can you use?**
+
+* Use a **Deployment** with `affinity` rules and `podAntiAffinity` to ensure two replicas land on each node.
+* Or use **DaemonSet with multiple containers per pod** (not ideal if you need pod-level isolation).
+
+---
+
+### 8. **What is a Pod Disruption Budget (PDB) and how is it useful?**
+
+* **PDB defines min available pods during voluntary disruptions** (node drain, upgrade).
+* Example:
+
+  ```yaml
+  apiVersion: policy/v1
+  kind: PodDisruptionBudget
+  spec:
+    minAvailable: 2
+    selector:
+      matchLabels:
+        app: my-app
+  ```
+* Ensures high availability during cluster maintenance.
+
+---
+
+### 9. **How do you handle certificate rotation in on-prem Kubernetes clusters?**
+
+* Options:
+
+  * Use `kubeadm cert renew` for cluster certificates.
+  * Automate with **cert-manager** for app TLS certs.
+  * Rotate kubelet client/server certs by restarting kubelet.
+* Challenge: Downtime risk if certs expire unnoticed → solved via **monitoring + automation**.
+
+---
+
+### 10. **What are the challenges with scheduling pods in a multi-node, multi-AZ setup?**
+
+* Challenges:
+
+  * **Zonal PVs** restrict pod rescheduling.
+  * **Cross-AZ latency** for DB workloads.
+  * **Uneven pod distribution** without affinity rules.
+* Fixes: Use **TopologySpreadConstraints**, **PodAntiAffinity**, and **multi-AZ aware StorageClasses**.
+
+---
+
+### 11. **How does the Kubernetes scheduler decide where to place pods?**
+
+* Factors considered:
+
+  * **Resource requests** (CPU/memory).
+  * **Affinity/anti-affinity** rules.
+  * **Taints & tolerations**.
+  * **TopologySpreadConstraints** for AZ balancing.
+* Scheduler score = best fit node → pod is placed.
+
+---
+
+### 12. **What happens when a StatefulSet pod cannot mount its volume after moving to another node?**
+
+* Likely cause: **EBS volume is stuck in old AZ**.
+* Pod fails until it can access a valid PV.
+* Fixes:
+
+  * Use **regional storage (EFS/FSx)**.
+  * Or ensure **StorageClass with WaitForFirstConsumer** aligns PVC with pod AZ.
+
+---
+
+⚡ These questions are **common in senior DevOps/SRE interviews** because they test **real-world production experience** with K8s storage, scheduling, and HA.
+
+👉 Sumanth, do you want me to **extend this into diagrams + YAML snippets** (like StatefulSet, PDB, affinity rules) so you can **showcase answers visually in interviews**?
