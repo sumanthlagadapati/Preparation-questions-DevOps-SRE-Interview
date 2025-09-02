@@ -795,5 +795,74 @@ Worked in Agile teams (Jira, daily standups, sprint reviews).
 Partnered with Dev/QA/SRE for end-to-end delivery.
 Promoted DevSecOps culture by embedding scans/security into CI/CD.
 
+🔹 Linux Interview Q&A
+1. How do you check running processes in Linux?
+
+Common commands:
+
+ps aux          # Show all processes with details
+ps -ef          # Full-format listing
+top             # Real-time view of processes
+htop            # Interactive, colored version of top
+
+
+For filtering:
+
+ps -ef | grep java    # Find Java processes
+pgrep nginx           # Find PID of nginx
+
+2. What’s the difference between top, htop, and ps?
+
+ps: Snapshot of processes at a given time (not real-time).
+
+top: Real-time monitoring (CPU/memory usage).
+
+htop: Advanced version of top → interactive UI, scrolling, sorting, and killing processes easily.
+
+3. How to schedule a cron job every 15 minutes?
+
+Edit crontab:
+
+crontab -e
+
+
+Add entry:
+
+*/15 * * * * /path/to/script.sh
+
+
+👉 Runs script every 15 minutes.
+
+4. What is the difference between hard link and soft link?
+
+Hard Link:
+
+Points directly to the inode of a file.
+
+File still exists even if original is deleted.
+
+Cannot span across filesystems.
+
+Example:
+
+ln file1 file2
+
+
+Soft Link (Symbolic Link):
+
+Points to the path of the original file.
+
+Breaks if the target is deleted.
+
+Can span filesystems.
+Example:
+ln -s file1 file2
+
+5. How to find which process is using high memory?
+
+Using top or htop, sort by memory usage (M).
+Or with ps:
+ps aux --sort=-%mem | head -10
+
 
 
