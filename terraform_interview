@@ -1,1 +1,76 @@
+Nice set of **Terraform interview questions** 🔥
+Here are **resume-backed, real-world answers** that fit your DevOps/SRE background:
+
+---
+
+## 🔹 Terraform Interview Q\&A
+
+### 1. **What are common challenges faced while working with Terraform?**
+
+* **State file conflicts** when multiple users try to apply changes.
+* **Drift** between actual infra vs. Terraform definitions.
+* **Secret management** (credentials inside `.tf` files).
+* **Module reusability** → keeping modules DRY across teams.
+* **Upgrades** (Terraform core/provider versions breaking compatibility).
+* **Long apply times** for large-scale infra.
+
+---
+
+### 2. **How do you handle state file management in Terraform?**
+
+* I always use **remote backends** (S3 + DynamoDB, Azure Blob, GCS).
+* **Locking enabled** with DynamoDB (AWS) or state locking feature in Terraform Cloud.
+* Run `terraform state list`, `terraform state rm/mv` for cleanup and migrations.
+* Avoid manual edits → instead use **workspaces** for environment separation (dev/stage/prod).
+
+---
+
+### 3. **How do you detect and resolve drift in Terraform-managed infrastructure?**
+
+* Run:
+
+  ```bash
+  terraform plan
+  ```
+
+  → shows differences between state file & actual infra.
+* **Terraform Cloud drift detection** can run automatically.
+* If drift detected:
+
+  * If intentional (e.g., hotfix in console) → update `.tf` code.
+  * If accidental → run `terraform apply` to restore infra.
+
+---
+
+### 4. **How do you manage secrets securely in Terraform?**
+
+* Never hardcode secrets in `.tf` files.
+* Approaches I’ve used:
+
+  * **AWS Secrets Manager / SSM Parameter Store** → inject via data sources.
+  * **Vault provider (HashiCorp Vault)** for dynamic secrets.
+  * **Terraform variables with `sensitive = true`**.
+  * Store `.tfvars` files in **Vault/KeyVault**, not Git.
+* Example:
+
+  ```hcl
+  variable "db_password" {
+    type      = string
+    sensitive = true
+  }
+  ```
+
+---
+
+### 5. **Why should you use a remote backend for Terraform?**
+
+* Benefits:
+
+  * **Centralized state file** → teams collaborate safely.
+  * **State locking** prevents race conditions.
+  * **Secure storage** (encrypted in S3, GCS, Azure Blob).
+  * **Audit trails & versioning** (Terraform Cloud, S3 versioning).
+* Without remote backend → local state risks corruption & accidental overwrite.
+
+---
 
