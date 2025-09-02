@@ -74,3 +74,151 @@ Here are **resume-backed, real-world answers** that fit your DevOps/SRE backgrou
 
 ---
 
+Perfect 👍 Here’s a **Terraform Commands Cheat Sheet** you can use before interviews (and even keep in your GitHub repo as `terraform-cheatsheet.md`).
+
+---
+
+# 🚀 Terraform Commands Cheat Sheet
+
+## 🔹 **Setup & Initialization**
+
+```bash
+terraform init
+```
+
+* Initializes Terraform in the working directory.
+* Downloads providers & modules.
+
+```bash
+terraform validate
+```
+
+* Validates the syntax & configuration files.
+
+```bash
+terraform fmt -recursive
+```
+
+* Formats `.tf` files consistently.
+
+---
+
+## 🔹 **Planning & Execution**
+
+```bash
+terraform plan
+```
+
+* Shows execution plan (what will be created/changed/destroyed).
+
+```bash
+terraform apply
+```
+
+* Executes the plan and applies changes.
+
+```bash
+terraform apply -auto-approve
+```
+
+* Applies without manual approval (use with caution).
+
+```bash
+terraform destroy
+```
+
+* Tears down infrastructure defined in `.tf` files.
+
+---
+
+## 🔹 **State Management**
+
+```bash
+terraform state list
+```
+
+* Lists resources tracked in the state file.
+
+```bash
+terraform state show <resource>
+```
+
+* Displays details of a resource from state.
+
+```bash
+terraform state mv <source> <destination>
+```
+
+* Moves resources within state (e.g., module refactor).
+
+```bash
+terraform state rm <resource>
+```
+
+* Removes a resource from state (doesn’t destroy infra).
+
+```bash
+terraform refresh
+```
+
+* Updates state file with real infra state.
+
+---
+
+## 🔹 **Resource Management**
+
+```bash
+terraform import <resource> <id>
+```
+
+* Brings an existing infra resource into Terraform management.
+
+```bash
+terraform taint <resource>
+```
+
+* Marks a resource for recreation in the next `apply`.
+
+```bash
+terraform untaint <resource>
+```
+
+* Cancels taint on a resource.
+
+---
+
+## 🔹 **Workspaces (Multi-env Management)**
+
+```bash
+terraform workspace list
+terraform workspace new dev
+terraform workspace select prod
+```
+
+* Create & switch between environments (dev/stage/prod).
+
+---
+
+## 🔹 **Drift Detection & Debugging**
+
+```bash
+terraform plan -detailed-exitcode
+```
+
+* Exit code shows drift:
+
+  * `0` → No changes.
+  * `2` → Changes present.
+
+```bash
+terraform providers
+```
+
+* Shows which providers are in use.
+
+```bash
+TF_LOG=DEBUG terraform apply
+```
+
+* Debug mode for troubleshooting.
+
