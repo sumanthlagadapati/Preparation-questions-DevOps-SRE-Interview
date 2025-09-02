@@ -584,3 +584,216 @@ CI/CD automates software integration, testing, and deployment.
 - Implements **auto-scaling and cost optimization strategies**.
 
 
+
+🟣 DevOps Engineer Interview Q&A – Technical + HM Prep
+Round 1: Technical Screening
+1. Explain the CI/CD workflow you follow and the kind of pipeline you use. How do you define and invoke pipelines in Jenkins?
+
+I use Jenkins Declarative pipelines defined in Jenkinsfiles stored in Git repos.
+
+Stages: Build → Unit Test → Static Scan → Docker Build/Push → Deploy (Helm/Terraform) → Smoke Tests.
+
+Pipelines are invoked via Git webhooks, scheduled jobs, or triggered manually for controlled releases.
+
+2. What are shared libraries in Jenkins, and how are they written and defined?
+
+Shared libraries store reusable Groovy scripts (e.g., build, deploy, notify).
+
+Structure:
+
+vars/
+   buildApp.groovy
+src/org/company/utils/
+
+
+Referenced in Jenkinsfile with:
+
+@Library('shared-lib') _
+buildApp()
+
+3. What kind of applications do you deploy using Jenkins pipelines, and what deployment tools do you use?
+
+Deployed Java (Spring Boot), Python APIs, NodeJS, React.
+
+Deployment tools: Helm for K8s (EKS/AKS), Terraform for infra, UrbanCode Deploy (legacy).
+
+4. If the Jenkins pipeline runs but the build doesn’t happen, what possible issues could be causing it?
+
+Agent/node mismatch.
+
+Wrong Maven/Gradle config.
+
+SCM branch not found.
+
+Missing credentials for Git/registry.
+
+5. What is the purpose of a webhook, and how is it used in a CI/CD pipeline?
+
+Webhook = Event trigger (e.g., Git push → Jenkins build).
+
+Ensures fast feedback and eliminates manual triggering.
+
+6. How do you create and manage Kubernetes clusters (using tools like Terraform), and what are the master and worker nodes?
+
+Provisioned EKS clusters via Terraform modules (VPC, SGs, IAM roles, node groups).
+
+Master (control plane) = API server, etcd, scheduler.
+
+Workers = EC2 nodes running pods.
+
+7. Common Kubernetes errors you’ve faced and resolution?
+
+CrashLoopBackOff → fix env vars, configs, image issues.
+
+ImagePullError → fix ECR creds (aws ecr get-login).
+
+Pending pods → adjust node selectors, resource quotas.
+
+8. Command to access a pod and create a Kubernetes object?
+kubectl exec -it <pod> -- /bin/bash
+
+
+YAML Example:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: app
+        image: nginx
+
+9. Explain Helm chart folder structure and deployment commands.
+mychart/
+ ├── Chart.yaml
+ ├── values.yaml
+ ├── templates/
+ └── charts/
+
+
+helm create mychart
+
+helm install myapp ./mychart -f values.yaml
+
+helm upgrade --install
+
+10. What are the stages in a Docker image build? Why ENTRYPOINT vs CMD?
+
+Stages: FROM → COPY/ADD → RUN → EXPOSE → ENTRYPOINT/CMD.
+
+ENTRYPOINT = fixed command.
+
+CMD = default args (override at runtime).
+
+11. How do you manage and connect services like DBs, EC2, EKS, ECS? ECS connect command?
+
+DBs via Secrets Manager + K8s secrets.
+
+EC2 with Terraform/Ansible.
+
+EKS via Helm/ArgoCD.
+
+ECS command:
+
+aws ecs execute-command --cluster myCluster --task taskID --container myApp --command "/bin/sh" --interactive
+
+12. Which container registry do you use?
+
+AWS ECR, Azure ACR, and DockerHub (POCs).
+
+Round 2: In-depth Technical Screening
+1. Branching strategy & production bug fix approach?
+
+GitFlow: features → develop → release → main.
+
+Prod bug → hotfix branch, patch, test, merge into release/main, redeploy.
+
+2. Typical deployment flow & Jenkins stages?
+
+SCM Checkout → Build → Test → SonarQube scan → Docker build/push → Helm deploy → Post-deploy checks.
+
+Ensured quality using SonarQube gates, Trivy scans, rollback on failure.
+
+3. Jenkins shared libraries usage & structure?
+vars/
+   buildApp.groovy
+src/
+   org.company.utils
+
+
+Integrated with:
+
+@Library('shared-library') _
+buildApp()
+
+4. Security scanning tools for Docker images?
+
+Trivy, Anchore, Aqua integrated in CI/CD.
+
+Also enabled ECR registry scans.
+
+5. Passing env variables in Docker builds & storing images?
+docker build --build-arg ENV=dev .
+
+
+Stored in ECR/ACR/DockerHub.
+
+6. DB connections in deployments?
+
+Via K8s secrets, ConfigMaps.
+
+RDS uses IAM auth + SGs.
+
+7. EKS authentication & secret management?
+
+Auth via aws eks update-kubeconfig.
+
+Secrets in AWS Secrets Manager, HashiCorp Vault, KMS-encrypted K8s secrets.
+
+8. AWS Lambda deployment & artifacts?
+
+Packaged .zip, stored in S3, deployed via CLI/Terraform.
+
+aws lambda update-function-code --function-name myFunc --s3-bucket my-bucket --s3-key lambda.zip
+
+9. Email signing & Helm chart signing?
+
+Email signing: ensures authenticity (PGP/GPG).
+
+Helm chart signing:
+
+helm package --sign --key <KEY> --keyring <PATH> mychart/
+
+Round 3: Hiring Manager Round
+1. Project Experiences
+
+Built Terraform modules for AWS multi-region infra (EKS, VPC, SGs).
+Automated CI/CD with Jenkins & GitLab for Java/Python/microservices.
+Implemented GitOps with ArgoCD for K8s deployments.
+Improved observability with Grafana, Prometheus, Datadog, CloudWatch.
+
+2. Day-to-Day Responsibilities
+
+IaC with Terraform, managing AWS/EKS resources.
+CI/CD pipeline maintenance & improvements.
+Incident response & root cause analysis.
+Monitoring & alerts setup for apps & infra.
+
+3. Behavioral Highlights
+
+Strength: Automation-first mindset.
+Weakness: Initially tech-focused, improved collaboration via mentoring.
+Conflict: Resolved via blameless postmortems & transparent comms.
+
+4. Teamwork & Culture Fit
+
+Worked in Agile teams (Jira, daily standups, sprint reviews).
+Partnered with Dev/QA/SRE for end-to-end delivery.
+Promoted DevSecOps culture by embedding scans/security into CI/CD.
+
+
+
