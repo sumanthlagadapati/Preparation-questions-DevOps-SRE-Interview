@@ -865,4 +865,151 @@ Or with ps:
 ps aux --sort=-%mem | head -10
 
 
+Great questions 👌 These are exactly the kind of **practical DevOps/SRE interview questions** you’ll see. I’ll answer each one clearly and in a way you can explain in interviews.
 
+---
+
+### 1️⃣ What is SCM, IaC, playbook, and a Docker image?
+
+* **SCM (Source Code Management):** Tools like **Git** that track code changes, enable collaboration, and maintain version history.
+* **IaC (Infrastructure as Code):** Writing infra definitions (Terraform, CloudFormation, Ansible) in code so you can version, review, and automate deployments.
+* **Playbook:** An **Ansible script** containing tasks for automation, e.g., installing packages or configuring servers.
+* **Docker Image:** A **blueprint for containers**, containing application code + runtime + dependencies, built once and run anywhere.
+
+---
+
+### 2️⃣ Explain Git and GitHub in simple terms.
+
+* **Git:** A version control system that lets you track code changes locally.
+* **GitHub:** A cloud-based hosting service for Git repositories where teams collaborate, review code, and integrate CI/CD.
+
+---
+
+### 3️⃣ How does GitLab CI/CD work?
+
+* GitLab CI/CD uses a **`.gitlab-ci.yml` pipeline file** stored in the repo.
+* Code pushes trigger the pipeline.
+* **Runners** execute jobs defined in stages (build, test, deploy).
+* Results (artifacts, test reports, deployments) are visible in GitLab UI.
+
+---
+
+### 4️⃣ What are the stages you have built in Jenkins pipelines?
+
+Typical stages:
+
+* **Build:** Compile code (Java → Maven, Node → npm).
+* **Test:** Run unit, integration, security, performance tests.
+* **Package:** Create artifacts (JARs, Docker images).
+* **Deploy:** Push to staging/prod (K8s, EC2, AKS).
+* **Notify:** Slack/email alerts for success/failure.
+
+---
+
+### 5️⃣ How do you resolve pipeline errors in Jenkins?
+
+* **Check console logs** for root cause.
+* Validate **Jenkinsfile syntax** (`pipeline syntax generator`).
+* Verify environment dependencies (agents, plugins, Docker images).
+* Add **retry/backoff logic** for flaky steps.
+* If infra-related, check **permissions, credentials, or network reachability**.
+
+---
+
+### 6️⃣ How can you schedule a cron job in shell scripting?
+
+* Use `crontab -e` and add a schedule:
+
+  ```bash
+  0 2 * * * /home/user/backup.sh   # Runs daily at 2AM
+  ```
+* Format: `minute hour day month weekday command`.
+
+---
+
+### 7️⃣ What is Kubernetes and why do we use it?
+
+* **Kubernetes (K8s):** An open-source container orchestrator that automates deployment, scaling, and management of containers.
+* **Why use it?**
+
+  * Self-healing (restarts crashed pods).
+  * Auto-scaling.
+  * Service discovery + load balancing.
+  * Declarative config via YAML.
+
+---
+
+### 8️⃣ If a pod crashes, how would you fix/debug it?
+
+* Run:
+
+  ```bash
+  kubectl get pods
+  kubectl describe pod <pod-name>
+  kubectl logs <pod-name>
+  ```
+* Check events for OOMKilled, CrashLoopBackOff, image pull errors.
+* Fix: adjust resources, fix code/config, redeploy image.
+
+---
+
+### 9️⃣ How do you secure a Terraform state file?
+
+* Store in **remote backends** (S3 with encryption, GCS, Azure Blob).
+* Enable **state locking** (DynamoDB for AWS).
+* Restrict access with IAM policies.
+* Use **encryption (KMS)** for sensitive data.
+
+---
+
+### 🔟 How do you manage secrets in DevOps projects?
+
+* **Vaults:** HashiCorp Vault, AWS Secrets Manager, Azure Key Vault.
+* **K8s Sealed Secrets** or External Secrets Operator.
+* Rotate secrets regularly.
+* Never commit secrets to Git.
+
+------------------------------------------------------------------------------------
+
+### 1️⃣1️⃣ What is a Kubernetes Deployment vs StatefulSet?
+
+* **Deployment:** For stateless apps, scales pods without identity, pods interchangeable.
+* **StatefulSet:** For stateful apps, each pod has stable identity (DNS, storage). Used for DBs, Kafka, Zookeeper.
+
+--------------------------------------------------------------------------------------------
+### 1️⃣2️⃣ How does Service & Ingress work in Kubernetes?
+
+* **Service:** Provides stable DNS & load balancing to pods.
+* Types: ClusterIP (internal), NodePort (expose on nodes), LoadBalancer (external).
+* **Ingress:** Manages external HTTP/HTTPS routes with advanced rules (TLS, paths, hostnames). Needs an Ingress Controller.
+
+-------------------------------------------------------------------------------------------------------------------
+### 1️⃣3️⃣ What is the difference between ConfigMap and Secret in Kubernetes?
+
+* **ConfigMap:** Stores **non-sensitive** config (URLs, ENV vars).
+* **Secret:** Stores **sensitive** data (passwords, tokens), base64 encoded, better security (RBAC, encryption at rest).
+
+---------------------------------------------------------------------------------------
+### 1️⃣4️⃣ How do you perform rolling updates & rollbacks in Kubernetes?
+
+* Rolling update:
+
+  ```bash
+  kubectl set image deployment/app app=nginx:1.21
+  kubectl rollout status deployment/app
+  ```
+* Rollback:
+
+  ```bash
+  kubectl rollout undo deployment/app
+  ```
+* Ensures zero downtime deployments.
+-------------------------------------------------------------------------------------------
+### 1️⃣5️⃣ What are taints and tolerations in Kubernetes, and when would you use them?
+
+* **Taint:** Marks a node to **repel pods** unless they tolerate it.
+* **Toleration:** Allows pods to run on tainted nodes.
+* Use cases:
+  * Isolate workloads (prod vs dev).
+  * Run system-critical pods on dedicated nodes.
+  * GPU workloads reserved for ML pods only.
